@@ -5,19 +5,21 @@
 ```
 go build main.go
 ./main [OPTIONS]
-- OPTIONS:
+-OPTIONS:
   -c float
         confidence (default 0.001)
   -fp string
-        data file path (default "test/comments100w.txt")
+        data file path (default "test/comments100.txt")
   -np int
         number parallel (default 10)
   -s float
-        support rate (default 0.001)
+        support count (default 1)
   -split
         whether split sentence
-  -w string
-        word to find (default "包装")
+  -stopwords
+  			stop words file path
+  -out	
+  			output csv path
 ```
 
 ## 算法介绍
