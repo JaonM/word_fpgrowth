@@ -3,6 +3,7 @@ package utils
 
 import (
 	"bufio"
+	"encoding/csv"
 	"os"
 )
 
@@ -22,3 +23,26 @@ func ReadFile(filePath string) [] string {
 	}
 	return texts
 }
+
+func WriteCSV(filePath string, headers [] string, data [][] string) {
+	file, err := os.Create(filePath)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+	if headers != nil {
+		err := writer.Write(headers)
+		if err != nil {
+			panic(err)
+		}
+	}
+	for _, value := range data {
+		err := writer.Write(value)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+

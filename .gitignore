@@ -26,3 +26,5 @@ git
 # End of https://www.gitignore.io/api/go
 
 .idea/
+.DS_Store
+test/

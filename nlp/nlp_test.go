@@ -1,8 +1,9 @@
 package nlp
 
 import (
-	"fmt"
+	"log"
 	"reflect"
+	"sort"
 	"testing"
 	"word_concurrence/utils"
 )
@@ -10,14 +11,14 @@ import (
 func TestRemovePunctuation(t *testing.T) {
 	text := "！@；'天气不错，。/：'，。/，,./"
 	text = RemovePunctuation(text)
-	fmt.Println(text)
+	log.Println(text)
 	if text != "天气不错" {
 		t.Error()
 	}
 }
 
 func TestRemovePunctuationAll(t *testing.T) {
-	texts := utils.ReadFile("../data/comments100.txt")
+	texts := utils.ReadFile("../test/comments100.txt")
 	texts = RemovePunctuationAll(texts)
 	if len(texts) != 100 {
 		t.Error()
@@ -31,35 +32,42 @@ func TestRemoveCharacter(t *testing.T) {
 	}
 }
 
+func TestDropDuplicates(t *testing.T) {
+	words := [] string{"好的", "不错", "好的"}
+	words = DropDuplicates(words)
+	sort.Strings(words)
+	if reflect.DeepEqual(words, [] string{"好的", "不错"}) {
+		t.Error()
+	}
+}
+
 func TestSplitSents(t *testing.T) {
-	texts := [] string{"今天天气不错；心情也不错。纠结ing"}
+	texts := [] string{"今天天气不错，心情也不错。纠结ing"}
 	texts = SplitSents(texts)
-	fmt.Println(texts)
+	log.Println(texts)
 	if len(texts) != 3 {
 		t.Error()
 	}
 }
 
 func TestPreprocess(t *testing.T) {
-	texts := utils.ReadFile("../data/comments100.txt")
-	wordBase := Preprocess(texts, false)
-	fmt.Println(wordBase)
+	wordBase := Preprocess("../test/validate.txt", false, "../data/stop_words.txt", 10)
+	log.Println(wordBase)
 	if wordBase == nil {
 		t.Error()
 	}
 }
 
 func TestWordCount(t *testing.T) {
-	texts := utils.ReadFile("../data/comments100.txt")
-	wordBase := Preprocess(texts, false)
+	wordBase := Preprocess("../test/comments100.txt", false, "../data/stop_words.txt", 10)
 	wc := WordCount(wordBase)
-	fmt.Println(wc)
+	log.Println(wc)
 }
 
 func TestRemoveStopwords(t *testing.T) {
-	stopwords := utils.ReadFile("../data/stopwords.txt")
-	words := RemoveStopwords([] string{"今天", "天气", "不错", "的", "了", "呢"}, stopwords)
-	fmt.Println(words)
+	stopwords := utils.ReadFile("../data/stop_words.txt")
+	words := RemoveStopwords([] string{"今天", "天气", "不错", "的", "了", "呢", ","}, stopwords)
+	log.Println(words)
 	if !reflect.DeepEqual(words, [] string{"今天", "天气", "不错"}) {
 		t.Error()
 	}

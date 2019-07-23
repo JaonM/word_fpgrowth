@@ -2,7 +2,9 @@
 package nlp
 
 import (
+	"bufio"
 	"github.com/yanyiwu/gojieba"
+	"os"
 	"regexp"
 	"sync"
 	"word_concurrence/utils"
@@ -46,10 +48,10 @@ func SearchWord(word string, candidates [] string) bool {
 	return false
 }
 
-func RemoveStopwords(words, stopwords [] string, ) [] string {
+func RemoveStopwords(words, stopwords [] string) [] string {
 	var clean [] string
 	for _, w := range words {
-		if SearchWord(w, stopwords) {
+		if SearchWord(w, stopwords) || w == " " {
 			continue
 		} else {
 			clean = append(clean, w)
@@ -67,30 +69,55 @@ func SplitSents(texts [] string) [] string {
 	return ret
 }
 
-//预处理过程: 1.分句(Optional)，2.去标点，3.去特殊字符，4. 分词
-func Preprocess(texts [] string, splitSent bool,stopwordsFilePath string) [] [] string {
-	if splitSent {
-		texts = SplitSents(texts)
+func SplitSent(text string) [] string {
+	re := regexp.MustCompile("[;,.，。；!?？！]")
+	return re.Split(text, -1)
+}
+
+//预处理过程: 1.分词 2.去停用词 3. 去重
+func Preprocess(filePath string, splitSent bool, stopwordsFilePath string, paraNum int) [] [] string {
+	file, err := os.Open(filePath)
+	if err != nil {
+		panic(err)
 	}
+	defer file.Close()
+	textCh := make(chan string)
+	go func() {
+		sc := bufio.NewScanner(file)
+		defer close(textCh)
+		for sc.Scan() {
+			text := sc.Text()
+			if splitSent {
+				texts := SplitSent(text)
+				for _, t := range texts {
+					textCh <- t
+				}
+			} else {
+				textCh <- text
+			}
+		}
+	}()
+
 	jieba := gojieba.NewJieba()
 	var ret [][]string
 	ch := make(chan [] string)
 	var wg sync.WaitGroup
-
 	stopwords := utils.ReadFile(stopwordsFilePath)
 
-	for _, t := range texts {
-		text := t
+	for i := 0; i < paraNum; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			text = RemovePunctuation(text)
-			text = RemoveCharacter(text)
-			words := jieba.Cut(text, true)
-			words = RemoveStopwords(words, stopwords)
-			ch <- words
+			for text := range textCh {
+				words := jieba.Cut(text, true)
+				words = RemoveStopwords(words, stopwords)
+				// 去重
+				words = DropDuplicates(words)
+				ch <- words
+			}
 		}()
 	}
+
 	go func() {
 		wg.Wait()
 		close(ch)
@@ -102,10 +129,23 @@ func Preprocess(texts [] string, splitSent bool,stopwordsFilePath string) [] [] 
 	return ret
 }
 
-func WordCount(wordSlice [][]string) map[string]int {
+// 去重
+func DropDuplicates(candidates [] string) [] string {
+	elemDict := make(map[string]bool)
+	for _, can := range candidates {
+		elemDict[can] = true
+	}
+	var dCandidates [] string
+	for elem := range elemDict {
+		dCandidates = append(dCandidates, elem)
+	}
+	return dCandidates
+}
+
+func WordCount(wordBase [][]string) map[string]int {
 	wc := make(map[string]int)
-	for _, text := range wordSlice {
-		for _, word := range text {
+	for _, words := range wordBase {
+		for _, word := range words {
 			wc[word] += 1
 		}
 	}

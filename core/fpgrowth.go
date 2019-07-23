@@ -2,10 +2,8 @@
 package core
 
 import (
-	"math"
 	"sort"
-	"sync"
-	"word_concurrence/nlp"
+	"strconv"
 )
 
 //项头表建立
@@ -14,139 +12,77 @@ func BuildHeadElems(wordCount map[string]int, supportCount int) (HeadElems, map[
 	var headElems HeadElems
 	var headAddr = make(map[string]*HeadElem)
 	for word, count := range wordCount {
-		if count > supportCount {
+		if count >= supportCount {
 			elem := HeadElem{word: word, count: count, treeNode: nil, pattern: nil}
 			headAddr[word] = &elem
 			headElems = append(headElems, elem)
 		}
 	}
+	// 项头表支持度降序排序
+	sort.Sort(sort.Reverse(headElems))
 	return headElems, headAddr
 }
 
-func searchHeadElem(word string, headAddr map[string]*HeadElem) *HeadElem {
-	return headAddr[word]
-}
-
 // 根据项头表过滤WordBase
-func FilterWordBase(headAddr map[string]*HeadElem, wordBase [][]string) []map[string]int {
-	var filteredWordBase []map[string]int
+func FilterWordBase(headAddr map[string]*HeadElem, wordBase [][]string) [][] string {
+	var filteredWordBase [][] string
 	for _, words := range wordBase {
-		var filteredWords = make(map[string]int)
+		var filteredWords [] string
+		var wordSupport Pairs
 		for _, word := range words {
-			if searchHeadElem(word, headAddr) != nil {
-				//filteredWords = append(filteredWords, word)
-				filteredWords[word] += 1
+			if headAddr[word] != nil {
+				wordSupport = append(wordSupport, Pair{word, headAddr[word].count})
 			}
 		}
-		filteredWordBase = append(filteredWordBase, filteredWords)
+		// 按支持度降序排序,此时与项头表采用相同的排序方法，保证二者相对顺序一致
+		sort.Sort(sort.Reverse(wordSupport))
+		for _, pair := range wordSupport {
+			filteredWords = append(filteredWords, pair.key)
+		}
+		if len(filteredWords) > 0 {
+			filteredWordBase = append(filteredWordBase, filteredWords)
+		}
 	}
 	return filteredWordBase
 }
 
-//建立FPNode
-func BuildFPTree(root *FPNode, wordBase []map[string]int, headAddr map[string]*HeadElem) {
-	for _, wordCount := range wordBase {
-		var nodes []*FPNode
-		//Sort map by key
-		var keys [] string
-		for k := range wordCount {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			nodes = append(nodes, &FPNode{key, wordCount[key], nil, nil, nil, nil})
-		}
-		insertNodeToTree(nodes, root, headAddr)
-	}
+// 二频繁项集合
+type TwoFreqItem struct {
+	BaseWord     string
+	Word         string
+	SupportCount int
+	Confidence   float64
 }
 
-func insertNodeToTree(nodes []*FPNode, root *FPNode, headAddr map[string]*HeadElem) {
-	p := root
-	for _, node := range nodes {
-		if p.child == nil {
-			p.Insert(node)
-			insertHeadElemTreeNode(node, headAddr)
-			p = p.child
-		} else {
-			currentNode := p.child
-			for currentNode != nil {
-				if currentNode.word == node.word {
-					currentNode.count += node.count
-					p = currentNode
-					break
-				}
-				currentNode = currentNode.neighbor
+// 输出所有二频繁项
+func WordConcurrence(headAddr map[string]*HeadElem, confidence float64) [] TwoFreqItem {
+	var freqItems [] TwoFreqItem
+	for baseWord, headElem := range headAddr {
+		for coWord, supportCount := range headElem.pattern {
+			con := float64(supportCount) / float64(headElem.count)
+			if con >= confidence {
+				freqItems = append(freqItems, TwoFreqItem{baseWord, coWord, supportCount, con})
 			}
-			if currentNode == nil {
-				p.Insert(node)
-				insertHeadElemTreeNode(node, headAddr)
+			con = float64(supportCount)/float64(headAddr[coWord].count)
+			if con >= confidence {
+				freqItems=append(freqItems,TwoFreqItem{coWord,baseWord,supportCount,con})
 			}
 		}
 	}
+
+	return freqItems
 }
 
-func insertHeadElemTreeNode(node *FPNode, headAddr map[string]*HeadElem) {
-	tmp := headAddr[node.word].treeNode
-	if tmp == nil {
-		headAddr[node.word].treeNode = node
-	} else {
-		for tmp.next != nil {
-			tmp = tmp.next
-		}
-		tmp.next = node
-	}
-}
 
-//获取条件模式基
-func ConditionalPattern(root *FPNode, headElems HeadElems, supportCount int, headAddr map[string]*HeadElem) {
-	//升序排序
-	sort.Sort(headElems)
-	var wg sync.WaitGroup
-	for _, headElem := range headElems {
-		elemCopy := headAddr[headElem.word]
-		wg.Add(1)
-		go func(headElem *HeadElem) {
-			defer wg.Done()
-			node := headElem.treeNode
-			pattern := make(map[string]int)
-			for node != nil {
-				p := node
-				count := p.count
-				for p.parent != root {
-					tempCount := pattern[p.parent.word] + count
-					if tempCount > supportCount {
-						pattern[p.parent.word] = tempCount
-					}
-					p = p.parent
-				}
-				node = node.next
-			}
-			headElem.pattern = pattern
-		}(elemCopy)
+func FreqItemsToStrings(items [] TwoFreqItem) [][] string {
+	var ret [] [] string
+	for _, item := range items {
+		var value [] string
+		value = append(value, item.BaseWord)
+		value = append(value, item.Word)
+		value = append(value, strconv.Itoa(item.SupportCount))
+		value = append(value, strconv.FormatFloat(item.Confidence, 'f', -1, 64))
+		ret = append(ret, value)
 	}
-	wg.Wait()
-}
-
-func WordConcurrence(word string, headAddr map[string]*HeadElem, confidence float64) [] string {
-	var candidates [] string
-	for w := range headAddr {
-		candidates = append(candidates, w)
-	}
-	if !nlp.SearchWord(word, candidates) {
-		return [] string{}
-	}
-	pattern := headAddr[word].pattern
-
-	if len(pattern) == 0 {
-		return [] string{}
-	}
-	var coWords [] string
-	for word, count := range pattern {
-		c1 := math.Min(float64(count), float64(headAddr[word].count))
-		confi := c1 / float64(headAddr[word].count)
-		if confi > confidence {
-			coWords = append(coWords, word)
-		}
-	}
-	return coWords
+	return ret
 }
